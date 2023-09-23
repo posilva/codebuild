@@ -1,0 +1,35 @@
+# Docs: https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
+version: 0.2
+
+env:
+  variables:
+    AUTHOR_0: "posilva@gmail.com"
+
+
+phases:
+  install:
+    commands:
+      - echo "no install commands"
+  pre_build:
+    commands:
+      - $(aws ecr get-login --region $AWS_DEFAULT_REGION --no-include-email)
+      - datetime="$(date +'%Y%m%d%H%M')"
+      - version="$(cat .version)"
+      - git_hash=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - image=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_NAME
+  build:
+    commands:
+      - docker build -t ${image}:latest .
+  post_build:
+    commands:
+      - docker tag ${image}:latest ${image}:${datetime}
+      - docker tag ${image}:latest ${image}:${git_hash}
+      - docker tag ${image}:latest ${image}:${version}
+      - docker push ${image}:latest
+      - docker push ${image}:${datetime}
+      - docker push ${image}:${git_hash}
+      - docker push ${image}:${version}
+      - printf '[{"name":"$IMAGE_NAME","imageUri":"%s"}]' ${image}:${version} > imagedefinitions.json
+
+artifacts:
+  files: imagedefinitions.json
